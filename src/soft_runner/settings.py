@@ -7,14 +7,27 @@ https://kedro.readthedocs.io/en/stable/kedro_project_setup/settings.html."""
 
 from kedro.framework.hooks import hook_impl
 
-class TestingHook:
+
+class SimulateNodeErrorHook:
+    @hook_impl
+    def before_pipeline_run(self, run_params, pipeline, catalog):
+        params = run_params["extra_params"]
+        simulate_error_node = params.get("error", "")
+        simulate_error_node = simulate_error_node.split(
+            "-"
+        )  # If it is a hyphen-separated list
+        print("Simulate nodes with error", simulate_error_node)
+        self.error_nodes = simulate_error_node
 
     @hook_impl
     def before_node_run(self, node):
-        if node.name == "B":
-            raise ValueError(node.name)
+        if node.name in self.error_nodes:
+            raise ValueError(
+                f"Node with error {node.name}, List of error node {self.error_nodes}"
+            )
 
-HOOKS = (TestingHook(),)
+
+HOOKS = (SimulateNodeErrorHook(),)
 
 # Installed plugins for which to disable hook auto-registration.
 # DISABLE_HOOKS_FOR_PLUGINS = ("kedro-viz",)
