@@ -21,7 +21,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def node_dependencies_reversed(self) -> Dict[Node, Set[Node]]:
+def reversed_node_dependencies(self) -> Dict[Node, Set[Node]]:
     """All dependencies of nodes where the first Node has a direct dependency on
     the second Node.
 
@@ -38,7 +38,7 @@ def node_dependencies_reversed(self) -> Dict[Node, Set[Node]]:
     return dependencies
 
 
-Pipeline.node_dependencies_reversed = property(node_dependencies_reversed)
+Pipeline.reversed_node_dependencies = property(reversed_node_dependencies)
 
 
 def find_skip_nodes(node, node_dependencies, skip_nodes=None) -> Set[Node]:
