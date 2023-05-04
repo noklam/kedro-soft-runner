@@ -46,14 +46,16 @@ def find_skip_nodes(node, node_dependencies, skip_nodes=None) -> Set[Node]:
     `skip_nodes` is used to eliminate unnecessary search path, the `skip_nodes` will be
     updated during the search.
 
+    Args:
+       node: A ``Node`` that need to be skipped due to exception.
+       node_dependencies: Node dependencies Dict[Node, Set[Node]], the key is the Node
+       and the value is the child of the node.
+       skip_nodes: A set of Node to be skipped.
+
     Returns:
         The set of nodes that need to be skipped.
     """
-    """_summary_
 
-    Returns:
-        _type_: _description_
-    """
     queue = [node]
     node_set = set()
     while queue:
@@ -97,7 +99,7 @@ class SoftFailRunner(SequentialRunner):
         nodes = pipeline.nodes
         done_nodes = set()
         skip_nodes = set()
-        node_dependencies = pipeline.node_dependencies_reversed
+        reversed_node_dependencies = pipeline.reversed_node_dependencies
 
         load_counts = Counter(chain.from_iterable(n.inputs for n in nodes))
         logger.warning("Using Custom Runner")
@@ -109,7 +111,7 @@ class SoftFailRunner(SequentialRunner):
                 run_node(node, catalog, hook_manager, self._is_async, session_id)
                 done_nodes.add(node)
             except Exception:
-                new_nodes = find_skip_nodes(node, node_dependencies, skip_nodes)
+                new_nodes = find_skip_nodes(node, reversed_node_dependencies, skip_nodes)
                 logger.warning(f"Skipped node: {str(new_nodes)}")
 
             # decrement load counts and release any data sets we've finished with
