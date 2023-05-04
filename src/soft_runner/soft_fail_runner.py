@@ -8,11 +8,12 @@ from itertools import chain
 
 from pluggy import PluginManager
 
-from kedro.io import AbstractDataSet, DataCatalog, MemoryDataSet
+from kedro.io import DataCatalog
 from kedro.pipeline import Pipeline
 from kedro.pipeline.node import Node
 from kedro.pipeline.pipeline import _strip_transcoding
-from kedro.runner.runner import AbstractRunner, run_node
+from kedro.runner.runner import  run_node
+from kedro.runner import SequentialRunner
 from typing import Dict, Set, Any
 from kedro.io.core import DataSetError
 import logging
@@ -40,8 +41,19 @@ def node_dependencies_reversed(self) -> Dict[Node, Set[Node]]:
 Pipeline.node_dependencies_reversed = property(node_dependencies_reversed)
 
 
-def find_descendent_nodes(node, node_dependencies, skip_nodes):
-    """Traverse the DAG with BFS to find all descendent nodes and merge them to the skip_nodes"""
+def find_skip_nodes(node, node_dependencies, skip_nodes=None) -> Set[Node]:
+    """Traverse the DAG with Breath-First-Search (BFS) to find all descendent nodes.
+    `skip_nodes` is used to eliminate unnecessary search path, the `skip_nodes` will be
+    updated during the search.
+
+    Returns:
+        The set of nodes that need to be skipped.
+    """
+    """_summary_
+
+    Returns:
+        _type_: _description_
+    """
     queue = [node]
     node_set = set()
     while queue:
@@ -56,34 +68,13 @@ def find_descendent_nodes(node, node_dependencies, skip_nodes):
     return node_set
 
 
-class DeferRunner(AbstractRunner):
-    """``SequentialRunner`` is an ``AbstractRunner`` implementation. It can
-    be used to run the ``Pipeline`` in a sequential manner using a
-    topological sort of provided nodes.
+class SoftFailRunner(SequentialRunner):
+    """``SoftFailRunner`` is an ``AbstractRunner`` implementation that runs a
+    ``Pipeline`` sequentially using a topological sort of provided nodes.
+    Unlike the SequentialRunner, this runner will not terminate the pipeline
+    immediately upon encountering node failure. Instead, it will continue to run on
+    remaining nodes as long as their dependencies are fulfilled.
     """
-
-    def __init__(self, is_async: bool = False):
-        """Instantiates the runner classs.
-
-        Args:
-            is_async: If True, the node inputs and outputs are loaded and saved
-                asynchronously with threads. Defaults to False.
-
-        """
-        super().__init__(is_async=is_async)
-
-    def create_default_data_set(self, ds_name: str) -> AbstractDataSet:
-        """Factory method for creating the default data set for the runner.
-
-        Args:
-            ds_name: Name of the missing data set
-
-        Returns:
-            An instance of an implementation of AbstractDataSet to be used
-            for all unregistered data sets.
-
-        """
-        return MemoryDataSet()
 
     def _run(
         self,
@@ -118,7 +109,7 @@ class DeferRunner(AbstractRunner):
                 run_node(node, catalog, hook_manager, self._is_async, session_id)
                 done_nodes.add(node)
             except Exception:
-                new_nodes = find_descendent_nodes(node, node_dependencies, skip_nodes)
+                new_nodes = find_skip_nodes(node, node_dependencies, skip_nodes)
                 logger.warning(f"Skipped node: {str(new_nodes)}")
 
 
@@ -126,28 +117,31 @@ class DeferRunner(AbstractRunner):
             for data_set in node.inputs:
                 load_counts[data_set] -= 1
                 if load_counts[data_set] < 1 and data_set not in pipeline.inputs():
-                    try:
-                        catalog.release(data_set)
-                    except DataSetError:
-                        continue  # Temporary ignore the GC issue
+                    catalog.release(data_set)
+                    # try:
+                    #     catalog.release(data_set)
+                    # except DataSetError:
+                    #     continue  # Temporary ignore the GC issue
             for data_set in node.outputs:
                 if load_counts[data_set] < 1 and data_set not in pipeline.outputs():
-                    try:
-                        catalog.release(data_set)
-                    except DataSetError:
-                        continue
+                    catalog.release(data_set)
+                    # try:
+                    #     catalog.release(data_set)
+                    # except DataSetError:
+                    #     continue
 
             logger.info(
                 "Completed %d out of %d tasks",
                 exec_index + 1 - len(skip_nodes),
                 len(nodes),
             )
-            logger.warn(
-            "%d node(s) failed during the execution",
-                len(skip_nodes),
-            )
+        logger.warn(
+        "%d node(s) failed during the execution",
+            len(skip_nodes),
+        )
         if skip_nodes:
             self._suggest_resume_scenario(pipeline, done_nodes)
+
     def run(
         self,
         pipeline: Pipeline,
@@ -183,7 +177,7 @@ class DeferRunner(AbstractRunner):
                 f"Pipeline input(s) {unsatisfied} not found in the DataCatalog"
             )
 
-        free_outputs = pipeline.outputs() - set(catalog.list())
+        # free_outputs = pipeline.outputs() - set(catalog.list())
         unregistered_ds = pipeline.data_sets() - set(catalog.list())
         for ds_name in unregistered_ds:
             catalog.add(ds_name, self.create_default_data_set(ds_name))

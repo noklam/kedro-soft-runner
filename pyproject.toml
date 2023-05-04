@@ -1,7 +1,7 @@
 [tool.kedro]
 package_name = "soft_runner"
 project_name = "soft-runner"
-kedro_init_version = "0.18.8"
+project_version = "0.18.8"
 
 [tool.isort]
 profile = "black"
