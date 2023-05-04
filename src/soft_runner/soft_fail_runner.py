@@ -12,7 +12,7 @@ from kedro.io import DataCatalog
 from kedro.pipeline import Pipeline
 from kedro.pipeline.node import Node
 from kedro.pipeline.pipeline import _strip_transcoding
-from kedro.runner.runner import  run_node
+from kedro.runner.runner import run_node
 from kedro.runner import SequentialRunner
 from typing import Dict, Set, Any
 from kedro.io.core import DataSetError
@@ -112,7 +112,6 @@ class SoftFailRunner(SequentialRunner):
                 new_nodes = find_skip_nodes(node, node_dependencies, skip_nodes)
                 logger.warning(f"Skipped node: {str(new_nodes)}")
 
-
             # decrement load counts and release any data sets we've finished with
             for data_set in node.inputs:
                 load_counts[data_set] -= 1
@@ -136,7 +135,7 @@ class SoftFailRunner(SequentialRunner):
                 len(nodes),
             )
         logger.warn(
-        "%d node(s) failed during the execution",
+            "%d node(s) failed during the execution",
             len(skip_nodes),
         )
         if skip_nodes:
