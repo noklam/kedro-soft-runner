@@ -48,16 +48,10 @@ def find_descendent_nodes(node, node_dependencies, skip_nodes):
         parent_node = queue.pop()
         if parent_node in skip_nodes:
             continue
-        print("!!!!", node_dependencies)
-        print(parent_node, parent_node.__repr__(), type(parent_node))
-        print(node_dependencies[parent_node])
         for child in node_dependencies[parent_node]:
             node_set.add(child)
             if child not in skip_nodes:
                 skip_nodes.add(child)
-                logger.warn(
-                f"Queue: {queue}, Child: {child}, Parent_node:{node_dependencies[parent_node]}"
-            )
             queue.append(child)
     return node_set
 
@@ -125,28 +119,35 @@ class DeferRunner(AbstractRunner):
                 done_nodes.add(node)
             except Exception:
                 new_nodes = find_descendent_nodes(node, node_dependencies, skip_nodes)
-                logger.warning(f"Adding new nodes to skip {new_nodes}")
-                self._suggest_resume_scenario(pipeline, done_nodes, catalog)
+                logger.warning(f"Skipped node: {str(new_nodes)}")
+
 
             # decrement load counts and release any data sets we've finished with
             for data_set in node.inputs:
                 load_counts[data_set] -= 1
                 if load_counts[data_set] < 1 and data_set not in pipeline.inputs():
-                    try:catalog.release(data_set)
-                    except DataSetError: continue # Temporary ignore the GC issue
+                    try:
+                        catalog.release(data_set)
+                    except DataSetError:
+                        continue  # Temporary ignore the GC issue
             for data_set in node.outputs:
                 if load_counts[data_set] < 1 and data_set not in pipeline.outputs():
-                    try:catalog.release(data_set)
-                    except DataSetError: continue
+                    try:
+                        catalog.release(data_set)
+                    except DataSetError:
+                        continue
 
             logger.info(
-                "Completed %d out of %d tasks", exec_index + 1 - len(skip_nodes), len(nodes)
+                "Completed %d out of %d tasks",
+                exec_index + 1 - len(skip_nodes),
+                len(nodes),
             )
-            logger.info(
-                f"Skipped nodes {skip_nodes}"
+            logger.warn(
+            "%d node(s) failed during the execution",
+                len(skip_nodes),
             )
-
-
+        if skip_nodes:
+            self._suggest_resume_scenario(pipeline, done_nodes)
     def run(
         self,
         pipeline: Pipeline,
@@ -193,7 +194,7 @@ class DeferRunner(AbstractRunner):
             )
         self._run(pipeline, catalog, hook_manager, session_id)
 
-        self._logger.info("Pipeline execution completed successfully.")
+        # self._logger.warn("Pipeline execution completed successfully.")
 
         # Override runner temporarily - need to handle the GC properly, not important for now
         # return {ds_name: catalog.load(ds_name) for ds_name in free_outputs}
