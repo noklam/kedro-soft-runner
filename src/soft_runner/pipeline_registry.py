@@ -13,5 +13,5 @@ def register_pipelines() -> Dict[str, Pipeline]:
         A mapping from pipeline names to ``Pipeline`` objects.
     """
     pipelines = {}
-    pipelines["__default__"] = disjoint_pipeline
+    pipelines["__default__"] = disjoint
     return pipelines

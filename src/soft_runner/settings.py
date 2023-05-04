@@ -5,6 +5,8 @@ https://kedro.readthedocs.io/en/stable/kedro_project_setup/settings.html."""
 # Instantiated project hooks.
 # from soft_runner.hooks import ProjectHooks
 
+import itertools
+
 from kedro.framework.hooks import hook_impl
 
 
