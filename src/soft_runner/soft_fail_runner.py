@@ -21,7 +21,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def reversed_node_dependencies(self) -> Dict[Node, Set[Node]]:
+def child_dependencies(self) -> Dict[Node, Set[Node]]:
     """All dependencies of nodes where the first Node has a direct dependency on
     the second Node.
 
@@ -38,10 +38,10 @@ def reversed_node_dependencies(self) -> Dict[Node, Set[Node]]:
     return dependencies
 
 
-Pipeline.reversed_node_dependencies = property(reversed_node_dependencies)
+Pipeline.child_dependencies = property(child_dependencies)
 
 
-def find_skip_nodes(node, node_dependencies, skip_nodes=None) -> Set[Node]:
+def update_skip_nodes(node, node_dependencies, skip_nodes=None) -> Set[Node]:
     """Traverse the DAG with Breath-First-Search (BFS) to find all descendent nodes.
     `skip_nodes` is used to eliminate unnecessary search path, the `skip_nodes` will be
     updated during the search.
@@ -99,37 +99,31 @@ class SoftFailRunner(SequentialRunner):
         nodes = pipeline.nodes
         done_nodes = set()
         skip_nodes = set()
-        reversed_node_dependencies = pipeline.reversed_node_dependencies
+        child_dependencies = pipeline.child_dependencies
 
         load_counts = Counter(chain.from_iterable(n.inputs for n in nodes))
         logger.warning("Using Custom Runner")
         for exec_index, node in enumerate(nodes):
             try:
                 if node in skip_nodes:
-                    logger.warning(f"Skipping nodes {node}")
+                    logger.warning(f"Skipped node: {str(node)}")
                     continue
                 run_node(node, catalog, hook_manager, self._is_async, session_id)
                 done_nodes.add(node)
-            except Exception:
-                new_nodes = find_skip_nodes(node, reversed_node_dependencies, skip_nodes)
+            except Exception as e:
+                new_nodes = update_skip_nodes(
+                    node, child_dependencies, skip_nodes
+                )
                 logger.warning(f"Skipped node: {str(new_nodes)}")
-
+                logger.warning(e)
             # decrement load counts and release any data sets we've finished with
             for data_set in node.inputs:
                 load_counts[data_set] -= 1
                 if load_counts[data_set] < 1 and data_set not in pipeline.inputs():
                     catalog.release(data_set)
-                    # try:
-                    #     catalog.release(data_set)
-                    # except DataSetError:
-                    #     continue  # Temporary ignore the GC issue
             for data_set in node.outputs:
                 if load_counts[data_set] < 1 and data_set not in pipeline.outputs():
                     catalog.release(data_set)
-                    # try:
-                    #     catalog.release(data_set)
-                    # except DataSetError:
-                    #     continue
 
             logger.info(
                 "Completed %d out of %d tasks",
@@ -178,7 +172,7 @@ class SoftFailRunner(SequentialRunner):
                 f"Pipeline input(s) {unsatisfied} not found in the DataCatalog"
             )
 
-        # free_outputs = pipeline.outputs() - set(catalog.list())
+        free_outputs = pipeline.outputs() - set(catalog.list())
         unregistered_ds = pipeline.data_sets() - set(catalog.list())
         for ds_name in unregistered_ds:
             catalog.add(ds_name, self.create_default_data_set(ds_name))
@@ -192,4 +186,12 @@ class SoftFailRunner(SequentialRunner):
         # self._logger.warn("Pipeline execution completed successfully.")
 
         # Override runner temporarily - need to handle the GC properly, not important for now
-        # return {ds_name: catalog.load(ds_name) for ds_name in free_outputs}
+        # run_result = {}
+        # for ds_name in free_outputs:
+        #     try:
+        #         run_result[ds_name] = catalog.load(ds_name)
+        #     except DataSetError:
+        #         # Due to some nodes are skipped, the GC is not behave correctly as some
+        #         # data haven't been loaded
+        #         continue
+        # return run_result
