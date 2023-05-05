@@ -25,7 +25,7 @@ class SimulateNodeErrorHook:
     def before_node_run(self, node):
         if node.name in self.error_nodes:
             raise ValueError(
-                f"Node with error {node.name}, List of error node {self.error_nodes}"
+                f"Trigger Error in node:{node.name}"
             )
 
 

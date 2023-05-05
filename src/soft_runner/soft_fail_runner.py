@@ -102,7 +102,6 @@ class SoftFailRunner(SequentialRunner):
         child_dependencies = pipeline.child_dependencies
 
         load_counts = Counter(chain.from_iterable(n.inputs for n in nodes))
-        logger.warning("Using Custom Runner")
         for exec_index, node in enumerate(nodes):
             try:
                 if node in skip_nodes:
