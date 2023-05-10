@@ -41,33 +41,7 @@ def child_dependencies(self) -> Dict[Node, Set[Node]]:
 Pipeline.child_dependencies = property(child_dependencies)
 
 
-def update_skip_nodes(node, node_dependencies, skip_nodes=None) -> Set[Node]:
-    """Traverse the DAG with Breath-First-Search (BFS) to find all descendent nodes.
-    `skip_nodes` is used to eliminate unnecessary search path, the `skip_nodes` will be
-    updated during the search.
 
-    Args:
-       node: A ``Node`` that need to be skipped due to exception.
-       node_dependencies: Node dependencies Dict[Node, Set[Node]], the key is the Node
-       and the value is the child of the node.
-       skip_nodes: A set of Node to be skipped.
-
-    Returns:
-        The set of nodes that need to be skipped.
-    """
-
-    queue = [node]
-    node_set = set()
-    while queue:
-        parent_node = queue.pop()
-        if parent_node in skip_nodes:
-            continue
-        for child in node_dependencies[parent_node]:
-            node_set.add(child)
-            if child not in skip_nodes:
-                skip_nodes.add(child)
-            queue.append(child)
-    return node_set
 
 
 class SoftFailRunner(SequentialRunner):
@@ -77,6 +51,34 @@ class SoftFailRunner(SequentialRunner):
     immediately upon encountering node failure. Instead, it will continue to run on
     remaining nodes as long as their dependencies are fulfilled.
     """
+
+    def _update_skip_nodes(self, node, node_dependencies, skip_nodes=None) -> Set[Node]:
+        """Traverse the DAG with Breath-First-Search (BFS) to find all descendent nodes.
+        `skip_nodes` is used to eliminate unnecessary search path, the `skip_nodes` will be
+        updated during the search.
+
+        Args:
+        node: A ``Node`` that need to be skipped due to exception.
+        node_dependencies: Node dependencies Dict[Node, Set[Node]], the key is the Node
+        and the value is the child of the node.
+        skip_nodes: A set of Node to be skipped.
+
+        Returns:
+            The set of nodes that need to be skipped.
+        """
+
+        queue = [node]
+        node_set = set()
+        while queue:
+            parent_node = queue.pop()
+            if parent_node in skip_nodes:
+                continue
+            for child in node_dependencies[parent_node]:
+                node_set.add(child)
+                if child not in skip_nodes:
+                    skip_nodes.add(child)
+                queue.append(child)
+        return node_set
 
     def _run(
         self,
@@ -110,7 +112,7 @@ class SoftFailRunner(SequentialRunner):
                 run_node(node, catalog, hook_manager, self._is_async, session_id)
                 done_nodes.add(node)
             except Exception as e:
-                new_nodes = update_skip_nodes(
+                new_nodes = self._update_skip_nodes(
                     node, child_dependencies, skip_nodes
                 )
                 logger.warning(f"Skipped node: {str(new_nodes)}")
