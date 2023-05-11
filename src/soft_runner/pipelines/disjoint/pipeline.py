@@ -19,7 +19,7 @@ country_names = [
 
 
 def process_data(x):
-    if "error" in x["id"]:
+    if x["id"].isin(["error"]).any():
         raise ValueError("Invalid Value!")
     return x
 
