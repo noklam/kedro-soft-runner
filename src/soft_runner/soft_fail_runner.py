@@ -3,45 +3,37 @@ used to run the ``Pipeline`` in a sequential manner using a topological sort
 of provided nodes.
 """
 
+import logging
 from collections import Counter
 from itertools import chain
+from typing import Any, Dict, Set
 
 from pluggy import PluginManager
 
 from kedro.io import DataCatalog
 from kedro.pipeline import Pipeline
 from kedro.pipeline.node import Node
-from kedro.pipeline.pipeline import _strip_transcoding
-from kedro.runner.runner import run_node
 from kedro.runner import SequentialRunner
-from typing import Dict, Set, Any
-from kedro.io.core import DataSetError
-import logging
-
-logger = logging.getLogger(__name__)
+from kedro.runner.runner import run_node
 
 
-def child_dependencies(self) -> Dict[Node, Set[Node]]:
-    """All dependencies of nodes where the first Node has a direct dependency on
-    the second Node.
+def update_skip_nodes(node, pipeline, skip_nodes=None) -> Set[Node]:
+    """Traverse the DAG with Breath-First-Search (BFS) to find all descendent nodes.
+    `skip_nodes` is used to eliminate unnecessary search path, the `skip_nodes` will be
+    updated during the search.
+
+    Args:
+       node: A ``Node`` that need to be skipped due to exception.
+       node_dependencies: Node dependencies Dict[Node, Set[Node]], the key is the Node
+       and the value is the child of the node.
+       skip_nodes: A set of Node to be skipped.
 
     Returns:
-        Dictionary where keys are nodes and values are sets made up of
-        their parent nodes. Independent nodes have this as empty sets.
+        The set of nodes that need to be skipped.
     """
-    dependencies = {node: set() for node in self._nodes}
-    for parent in self._nodes:
-        for output in parent.outputs:
-            for child in self._nodes_by_input[_strip_transcoding(output)]:
-                dependencies[parent].add(child)
-
-    return dependencies
-
-
-Pipeline.child_dependencies = property(child_dependencies)
-
-
-
+    node_set = pipeline.from_nodes(node.name).nodes
+    skip_nodes |= set(pipeline.from_nodes(node.name).nodes)
+    return node_set
 
 
 class SoftFailRunner(SequentialRunner):
@@ -51,34 +43,6 @@ class SoftFailRunner(SequentialRunner):
     immediately upon encountering node failure. Instead, it will continue to run on
     remaining nodes as long as their dependencies are fulfilled.
     """
-
-    def _update_skip_nodes(self, node, node_dependencies, skip_nodes=None) -> Set[Node]:
-        """Traverse the DAG with Breath-First-Search (BFS) to find all descendent nodes.
-        `skip_nodes` is used to eliminate unnecessary search path, the `skip_nodes` will be
-        updated during the search.
-
-        Args:
-        node: A ``Node`` that need to be skipped due to exception.
-        node_dependencies: Node dependencies Dict[Node, Set[Node]], the key is the Node
-        and the value is the child of the node.
-        skip_nodes: A set of Node to be skipped.
-
-        Returns:
-            The set of nodes that need to be skipped.
-        """
-
-        queue = [node]
-        node_set = set()
-        while queue:
-            parent_node = queue.pop()
-            if parent_node in skip_nodes:
-                continue
-            for child in node_dependencies[parent_node]:
-                node_set.add(child)
-                if child not in skip_nodes:
-                    skip_nodes.add(child)
-                queue.append(child)
-        return node_set
 
     def _run(
         self,
@@ -101,22 +65,21 @@ class SoftFailRunner(SequentialRunner):
         nodes = pipeline.nodes
         done_nodes = set()
         skip_nodes = set()
-        child_dependencies = pipeline.child_dependencies
 
         load_counts = Counter(chain.from_iterable(n.inputs for n in nodes))
         for exec_index, node in enumerate(nodes):
             try:
                 if node in skip_nodes:
-                    logger.warning(f"Skipped node: {str(node)}")
+                    self._logger.warning(f"Skipped node: {str(node)}")
                     continue
                 run_node(node, catalog, hook_manager, self._is_async, session_id)
                 done_nodes.add(node)
             except Exception as e:
-                new_nodes = self._update_skip_nodes(
-                    node, child_dependencies, skip_nodes
+                new_nodes = update_skip_nodes(
+                    node, pipeline, skip_nodes
                 )
-                logger.warning(f"Skipped node: {str(new_nodes)}")
-                logger.warning(e)
+                self._logger.warning(f"Skipped node: {str(new_nodes)}")
+                self._logger.warning(e)
             # decrement load counts and release any data sets we've finished with
             for data_set in node.inputs:
                 load_counts[data_set] -= 1
@@ -126,12 +89,12 @@ class SoftFailRunner(SequentialRunner):
                 if load_counts[data_set] < 1 and data_set not in pipeline.outputs():
                     catalog.release(data_set)
 
-            logger.info(
+            self._logger.info(
                 "Completed %d out of %d tasks",
                 exec_index + 1 - len(skip_nodes),
                 len(nodes),
             )
-        logger.warn(
+        self._logger.warn(
             "%d node(s) failed during the execution",
             len(skip_nodes),
         )
@@ -179,12 +142,12 @@ class SoftFailRunner(SequentialRunner):
             catalog.add(ds_name, self.create_default_data_set(ds_name))
 
         if self._is_async:
-            self._logger.info(
+            self._self._logger.info(
                 "Asynchronous mode is enabled for loading and saving data"
             )
         self._run(pipeline, catalog, hook_manager, session_id)
 
-        # self._logger.warn("Pipeline execution completed successfully.")
+        # self._self._logger.warn("Pipeline execution completed successfully.")
 
         # Override runner temporarily - need to handle the GC properly, not important for now
         # run_result = {}
