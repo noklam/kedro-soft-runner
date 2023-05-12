@@ -53,3 +53,59 @@ Romania:
 Singapore:
   type: pandas.CSVDataSet
   filepath: data/01_raw/Singapore.csv
+
+Chile_processed:
+  type: pandas.CSVDataSet
+  filepath: data/04_feature/Chile_processed.csv
+
+Finland_processed:
+  type: pandas.CSVDataSet
+  filepath: data/04_feature/Finland_processed.csv
+
+Germany_processed:
+  type: pandas.CSVDataSet
+  filepath: data/04_feature/Germany_processed.csv
+
+Greece_processed:
+  type: pandas.CSVDataSet
+  filepath: data/04_feature/Greece_processed.csv
+
+Ireland_processed:
+  type: pandas.CSVDataSet
+  filepath: data/04_feature/Ireland_processed.csv
+
+Israel_processed:
+  type: pandas.CSVDataSet
+  filepath: data/04_feature/Israel_processed.csv
+
+Italy_processed:
+  type: pandas.CSVDataSet
+  filepath: data/04_feature/Italy_processed.csv
+
+Norway_processed:
+  type: pandas.CSVDataSet
+  filepath: data/04_feature/Norway_processed.csv
+
+Peru_processed:
+  type: pandas.CSVDataSet
+  filepath: data/04_feature/Peru_processed.csv
+
+Philippines_processed:
+  type: pandas.CSVDataSet
+  filepath: data/04_feature/Philippines_processed.csv
+
+Poland_processed:
+  type: pandas.CSVDataSet
+  filepath: data/04_feature/Poland_processed.csv
+
+Portugal_processed:
+  type: pandas.CSVDataSet
+  filepath: data/04_feature/Portugal_processed.csv
+
+Romania_processed:
+  type: pandas.CSVDataSet
+  filepath: data/04_feature/Romania_processed.csv
+
+Singapore_processed:
+  type: pandas.CSVDataSet
+  filepath: data/04_feature/Singapore_processed.csv

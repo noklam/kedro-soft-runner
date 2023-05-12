@@ -62,8 +62,8 @@ class SoftFailRunner(SequentialRunner):
             except Exception as e:
                 new_nodes = self._update_skip_nodes(node, pipeline, skip_nodes)
                 fail_nodes.add(node)
-                logger.warning(f"Skipped node: {str(new_nodes)}")
-                logger.warning(e)
+                logger.error(f"Skipped node: {str(new_nodes)}")
+                logger.error(e)
             # decrement load counts and release any data sets we've finished with
             for data_set in node.inputs:
                 load_counts[data_set] -= 1
@@ -75,7 +75,7 @@ class SoftFailRunner(SequentialRunner):
 
             logger.info(
                 "Completed %d out of %d tasks",
-                exec_index + 1 - len(skip_nodes),
+                len(done_nodes),
                 len(nodes),
             )
         self._summary(pipeline, skip_nodes, fail_nodes)
